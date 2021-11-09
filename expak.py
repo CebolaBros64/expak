@@ -198,7 +198,7 @@ __all__ = ['process_resources',
            'nop_converter',
            'print_err']
 
-__version__ = "1.1.1"
+__version__ = "1.1.1.z"
 
 
 import struct
@@ -387,7 +387,7 @@ def update_targets(targets, enc_targets):
     targets.clear()
     targets.update(new_targets)
 
-def process_resources_int(pak_path, converter, targets):
+def process_resources_int(pak_path, converter, is_lzma, targets):
     """Extract and process resources contained in a pak file.
 
     Implement :func:`process_resources` for a single pak file.
@@ -410,6 +410,11 @@ def process_resources_int(pak_path, converter, targets):
     :rtype:   bool
 
     """
+    if is_lzma:
+        sufix = ".lzma"
+    else:
+        sufix = ""
+
     try:
         with open(pak_path, 'rb') as instream:
             # Get resources to process and iterate over them.
@@ -430,9 +435,9 @@ def process_resources_int(pak_path, converter, targets):
                 # indicated by the type of the targets argument.
                 try:
                     if targets is None:
-                        converter(orig_data, file_name.decode())
+                        converter(orig_data, file_name.decode() + sufix)
                     else:
-                        if converter(orig_data, targets[file_name][1]):
+                        if converter(orig_data, targets[file_name][1] + sufix):
                             del targets[file_name]
                 except:
                     processing_exception = True
@@ -446,7 +451,7 @@ def process_resources_int(pak_path, converter, targets):
                 sys.exc_info()[1], pak_path))
         return False
 
-def process_resources(sources, converter, targets=None):
+def process_resources(sources, converter, is_lzma, targets=None):
     """Extract and process resources contained in one or more pak files.
 
     The ``converter`` parameter accepts a function that will be used to process
@@ -509,11 +514,11 @@ def process_resources(sources, converter, targets=None):
     all_success = True
     if is_string(sources):
         # Handle single-string input for the sources argument.
-        all_success = process_resources_int(sources, converter, enc_targets)
+        all_success = process_resources_int(sources, converter, is_lzma, enc_targets)
     else:
         # Handle iterable input for the sources argument.
         for pak_path in sources:
-            success = process_resources_int(pak_path, converter, enc_targets)
+            success = process_resources_int(pak_path, converter, is_lzma, enc_targets)
             all_success = success and all_success
     update_targets(targets, enc_targets)
     return all_success
@@ -558,7 +563,7 @@ def nop_converter(orig_data, name):
         outstream.write(orig_data)
     return True
 
-def extract_resources(sources, targets=None):
+def extract_resources(sources, targets=None, is_lzma=False):
     """Extract resources contained in one or more pak files.
 
     Convenience function for invoking :func:`process_resources` with the
@@ -579,7 +584,7 @@ def extract_resources(sources, targets=None):
     :rtype:   bool
 
     """
-    return process_resources(sources, nop_converter, targets)
+    return process_resources(sources, nop_converter, is_lzma, targets)
 
 def resource_names_int(pak_path):
     """Return the name of every resource in a pak file.
@@ -718,12 +723,16 @@ def simple_expak(argv=None):
     for a in argv:
         if a[-4:].lower() == ".pak":
             pak_paths.add(a)
+            is_lzma = False
+        elif a[-5:].lower() == ".pakz":
+            pak_paths.add(a)
+            is_lzma = True
         else:
             targets.add(a)
     if not targets:
         targets = None
     # Extract those resources from those pak files.
-    success = extract_resources(pak_paths, targets)
+    success = extract_resources(pak_paths, targets, is_lzma)
     # Print any specified resources not found/extracted.
     if targets:
         print("not found (or not successfully extracted):")
